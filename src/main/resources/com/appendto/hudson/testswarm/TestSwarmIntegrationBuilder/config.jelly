@@ -22,14 +22,13 @@
   	
 	<f:entry name="chooseBrowsers" title="Choose Browsers" field="chooseBrowsers" >
     	<select name="chooseBrowsers">
-            <option value="popular">Supported browsers</option>	    	
+    	    <option value="basic">Basic: Firefox and Chrome</option>
+            <option value="supported">Supported browsers</option>
         	<option value="all">All available browsers</option>
             <option value="current">Current release of all major browsers</option>
-            <option value="gbs">Browsers currently supported in Yahoo's Graded Browser Support</option>
             <option value="beta">Upcoming alphas/betas of popular browsers</option>
-            <option value="popularbeta">Popular browsers and their upcoming alphas/betas</option>
         </select>
-    </f:entry>   
+    </f:entry>
 
   	<f:entry title="Polling Interval (in secs)">
 		<f:textbox field="pollingIntervalInSecs" default="10" clazz="required" checkMessage="${%mandatory.pollingIntervalInSecs}" value="${instance.pollingIntervalInSecs}"/>
@@ -50,9 +49,6 @@
           <f:entry title="URL" field="testUrl">
             <f:textbox value="${testSuiteData.testUrl}" />
           </f:entry>          
-		  <f:entry title="Enable CacheCracker" field="testCacheCracker">
-            <f:checkbox name="testCacheCracker" checked="${testSuiteData.testCacheCracker}" default="true"/>
-          </f:entry>
           <f:entry title="Disable Test" field="disableTest">
             <f:checkbox name="disableTest" checked="${testSuiteData.disableTest}" />
           </f:entry>

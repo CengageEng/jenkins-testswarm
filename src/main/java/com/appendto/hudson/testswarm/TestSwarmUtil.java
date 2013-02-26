@@ -1,16 +1,19 @@
 package com.appendto.hudson.testswarm;
 
+import hudson.model.AbstractBuild;
 import hudson.model.BuildListener;
 
-import java.io.IOException;
-import java.io.Reader;
-import java.io.StringReader;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.StringTokenizer;
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import hudson.model.Result;
+import net.sf.json.JSONArray;
+import net.sf.json.JSONObject;
+import net.sf.json.JSONSerializer;
 import org.apache.commons.lang.StringUtils;
 
 public class TestSwarmUtil {
@@ -23,123 +26,109 @@ public class TestSwarmUtil {
 			String html = new TestSwarmDecisionMaker().grabPage(url);
 			//System.out.println(new TestSwarmUtil().getGridText(html));
 			TestSwarmUtil testSwarmUtil = new TestSwarmUtil().getInstance();
-			System.out.println("Result: \n" + testSwarmUtil.processResult(html));
+			System.out.println("Result: \n" + testSwarmUtil.processResult(url, "", null, null));
 		}
 		catch(Exception ex) {
 			ex.printStackTrace();
 		}
 	}
 
-	public StringBuffer processResult(String html) {
-		StringBuffer stringBuffer = null;
+    public static JSONObject getAndParseJSON(String httpUrl, AbstractBuild build, BuildListener listener) throws IOException {
+        URL url = new URL(httpUrl);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setRequestMethod("POST");
+        connection.setInstanceFollowRedirects(false);
 
-		try {
-			stringBuffer = new StringBuffer("");
+        InputStreamReader in = new InputStreamReader((InputStream) connection.getContent());
+        BufferedReader buff = new BufferedReader(in);
+        StringBuilder data = new StringBuilder();
+        String line;
+        do {
+            line = buff.readLine();
+            data.append(line);
+        } while (line != null);
 
-			List<String> moduleList = getModulesList(html);
-			String moduleName = null;
+        // Parse into JSONObject
+        JSONObject json = (JSONObject) JSONSerializer.toJSON(data.toString());
 
-			stringBuffer.append("\nFailed Test Case(s) Summary:\n ");
+        // Handle errors automatically (this could be an issue if an error is really just a warning
+        // and the build continues normally...)
+        if (json.has("error")) {
+            JSONObject error = json.getJSONObject("error");
+            listener.getLogger().println("");
+            listener.getLogger().println("[ERROR] An error occurred on the TestSwarm server:");
+            listener.getLogger().println("  Code: " + error.getString("code"));
+            listener.getLogger().println("  Info: " + error.getString("info"));
+            build.setResult(Result.FAILURE);
+        }
 
-			for (int index = 0 ; index < moduleList.size(); index ++) {
-				StringTokenizer tokenizedString = new StringTokenizer(moduleList.get(index), "|");
+        return json;
+    }
 
-				while (tokenizedString.hasMoreElements()) {
-					moduleName = tokenizedString.nextElement().toString();
-					break;
-				}
 
-				stringBuffer.append("\n" + moduleName + ":");
-						
-				while (tokenizedString.hasMoreElements()) {
-					String result = getFailedResultString(moduleName, tokenizedString.nextElement().toString());
-					if (result != null)
-						stringBuffer.append("\n" + result);
-					else 						
-						stringBuffer.append("\tNone");					
-				}			
-				
-			}
-			
-			String finalResult = new String(stringBuffer);
-			
-			stringBuffer.append("\n\nDetails: \n");
+	public StringBuffer processResult(String jobUrl, String testSwarmServerUrl, AbstractBuild build, BuildListener listener) throws IOException {
 
-			for (int index = 0 ; index < moduleList.size(); index ++) {
-				StringTokenizer tokenizedString = new StringTokenizer(moduleList.get(index), "|");
+        // What was the result?
+        JSONObject jobResult = TestSwarmUtil.getAndParseJSON(jobUrl, build, listener);
+        JSONObject job = jobResult.getJSONObject("job");
 
-				while (tokenizedString.hasMoreElements()) {
-					stringBuffer.append("\nModule: " + tokenizedString.nextElement());
-					break;
-				}
+		StringBuffer stringBuffer = new StringBuffer();
 
-				while (tokenizedString.hasMoreElements()) {
-					stringBuffer.append("\n" + manipulateString(tokenizedString.nextElement().toString()));
-				}
-				stringBuffer.append("\n");
-			}
-		}
-		catch (Throwable th) {
-			th.printStackTrace();
-		}
-		return stringBuffer;		
-	}
+        JSONArray runs = job.getJSONArray("runs");
+        JSONObject run = runs.getJSONObject(0);
+        JSONObject userAgents = run.getJSONObject("uaRuns");
 
-	private String getFailedResultString(String moduleName, String string) {
-		// TODO Auto-generated method stub
-		if (string != null && string.contains("fail")) {
-			//return "Module: " + moduleName + " - There are " + string.split("-")[1] + " failed TCs in " + string.split("-")[0].split(" ")[1];
-			return "\tThere are " + string.split("-")[1] + " failed TCs in " + string.split("-")[0].split(" ")[1];
-		}
-		return null;
-	}
+        stringBuffer.append("\nTest Case(s) Summary:\n ");
 
-	private String manipulateString(String details) {
-		String manipulatedString = null;
+        Map<String, HashMap> results = new HashMap<String, HashMap>();
 
-		try {
-			String parse_1[] = details.split(" ");
-			String passOrFail = parse_1[0];
+        results.put("Browsers without Results", new HashMap<String, String>());
+        results.put("Passed Browsers", new HashMap<String, String>());
+        results.put("Failed Browsers", new HashMap<String, String>());
+        results.put("Pending Browsers", new HashMap<String, String>());
 
-			String parse_2[] = null;
-			
-			if (parse_1[1].contains("-")) 				
-				parse_2 = parse_1[1].split("-");				
-			else 
-				parse_2 = parse_1[2].split("-");
-						
-			String browser = "na";
-			int count = -1;
+        for (Iterator iterator = userAgents.keys(); iterator.hasNext(); ) {
+            String agentName = (String)iterator.next();
 
-			if (parse_2 != null) {
-				browser = parse_2[0];
+            JSONObject userAgentInfo = userAgents.getJSONObject(agentName);
+            String runStatus = userAgentInfo.getString("runStatus");
 
-				if (browser.equalsIgnoreCase("notdone"))
-					browser = "na";
-				
-				try {
-					if(parse_2[1] != null) 
-						count = Integer.parseInt(parse_2[1]);
-				}
-				catch(ArrayIndexOutOfBoundsException exception) {
-					//NOP
-				}
-				catch(NumberFormatException exception) {
-					//NOP
-				}
+            String resultUrl = userAgentInfo.optString("runResultsUrl", null);
+            if (resultUrl != null) {
+                resultUrl = resultUrl.replaceAll("testswarm/","");
+            } else {
+                resultUrl = "";
+            }
 
-				if (count == -1) 
-					manipulatedString = "Browser - " + browser + "; Status - " + passOrFail;			
-				else 
-					manipulatedString = "Browser - " + browser + "; No. of TCs with status " + passOrFail + " - " + count;		
+            if (runStatus.equals("failed")) {
+                results.get("Failed Browsers").put(agentName, resultUrl);
+            } else if (runStatus.equals("passed")) {
+                results.get("Passed Browsers").put(agentName, resultUrl);
+            } else if (runStatus.equals("new")) {
+                results.get("Browsers without Results").put(agentName, resultUrl);
+            } else if (runStatus.equals("progress")) {
+                results.get("Pending Browsers").put(agentName, resultUrl);
+            }
+        }
 
-			}
-		}
-		catch (Throwable throwable) {
-			throwable.printStackTrace();			
-		}
+        for (String status : results.keySet()) {
+            if (results.get(status).size() > 0) {
+                stringBuffer.append("\n").append(status).append(": -----------------\n");
+                for (Object o : results.get(status).keySet()) {
+                    String ua = (String) o;
+                    String url = (String) (results.get(status).get(ua));
 
-		return manipulatedString;
+                    stringBuffer.append("   ").append(ua);
+                    if (!url.equals("")) {
+                        stringBuffer.append(": ").append(testSwarmServerUrl).append(url);
+                    }
+
+                    stringBuffer.append("\n");
+                }
+            }
+        }
+
+		return stringBuffer;
 	}
 
 	private TestSwarmUtil() {

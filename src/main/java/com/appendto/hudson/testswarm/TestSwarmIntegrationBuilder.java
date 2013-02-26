@@ -13,8 +13,7 @@ import hudson.tasks.Builder;
 import hudson.util.FormValidation;
 import hudson.util.VariableResolver;
 
-import java.io.IOException;
-import java.io.Serializable;
+import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -24,7 +23,9 @@ import java.util.Map;
 
 import javax.servlet.ServletException;
 
+import net.sf.json.JSON;
 import net.sf.json.JSONObject;
+import net.sf.json.JSONSerializer;
 
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
@@ -266,10 +267,9 @@ public class TestSwarmIntegrationBuilder extends Builder {
 			return false;
 		}
 
-		URL url;
-		HttpURLConnection urlConnection;
 		String redirectURL = null;
 		StringBuffer requestStr = new StringBuffer();
+        JSONObject submitResult = new JSONObject();
 
 		try {
 
@@ -277,61 +277,51 @@ public class TestSwarmIntegrationBuilder extends Builder {
 			populateStaticDataInRequestString(requestStr);
 			populateTestSuites(requestStr);
 
-			// Create connection
-			url = new URL(this.testswarmServerUrlCopy + "?" + requestStr.toString());
-			urlConnection = (HttpURLConnection) url.openConnection();
-			urlConnection.setRequestMethod("HEAD");
-			urlConnection.setInstanceFollowRedirects(false);
-			//physically connect
-			urlConnection.connect();
 
-			Map<String, List<String>> headerFields = urlConnection.getHeaderFields();
-			//fetch redirected url
-			redirectURL =  urlConnection.getHeaderField("Location");
-			//if location is null - somewhere some thing wrong
-			if (redirectURL == null || redirectURL.trim().length() ==0) {
-				listener.getLogger().println("Failed to post your request to Testswarm Server");
-				listener.getLogger().println("It could be because of various reasons, one such is incorrect username or authtoken. " +
-												"So please verify it");
-				build.setResult(Result.FAILURE);
-				return false;
-			}
+//            listener.getLogger().println("Request to TestSwarm:");
+//            listener.getLogger().println(requestStr);
 
-			String jobUrl = this.testswarmServerUrlCopy + redirectURL;
+			// Call TestSwarm
+            submitResult = TestSwarmUtil.getAndParseJSON(this.testswarmServerUrlCopy + "/api.php?" + requestStr.toString(), build, listener);
+
+            // Did we get an error?
+            if (build.getResult() == Result.FAILURE) {
+                return false;
+            }
+
+			JSONObject job = submitResult.getJSONObject("addjob");
 			listener.getLogger().println("**************************************************************");
-			listener.getLogger().println("Your request is successfully posted to TestSwarm Server and " +
-					" you can view the result in the following URL");
-			listener.getLogger().println(jobUrl);
+			listener.getLogger().println("Your request was successfully posted to the TestSwarm Server");
+			listener.getLogger().println("Job ID #" + job.getString("id") + " @ " + this.testswarmServerUrlCopy +
+                    "/job/" + job.getString("id"));
 			listener.getLogger().println("**************************************************************");
 			listener.getLogger().println("");
 			listener.getLogger().println("Analyzing Test Suite Result....");
+
+            String jobUrl = this.testswarmServerUrlCopy + "/api.php?action=job&item=" + job.getString("id");
+
 			if (!analyzeTestSuiteResults(jobUrl, build, listener)) {
 				listener.getLogger().println("Analyzing Test Suite Result COMPLETED...");
 				listener.getLogger().println("");
 
-				//listener.getLogger().println(TestSwarmUtil.getInstance().getGridText(new TestSwarmDecisionMaker().grabPage(jobUrl)));
-				listener.getLogger().println(TestSwarmUtil.getInstance().processResult(new TestSwarmDecisionMaker().grabPage(jobUrl)));
+				listener.getLogger().println(TestSwarmUtil.getInstance().processResult(jobUrl, this.testswarmServerUrlCopy, build, listener));
 				build.setResult(Result.FAILURE);
 				return false;
-			}
-			listener.getLogger().println("Analyzing Test Suite Result COMPLETED...");
-			listener.getLogger().println("");
-			//listener.getLogger().println(TestSwarmUtil.getInstance().getGridText(new TestSwarmDecisionMaker().grabPage(jobUrl)));
-			listener.getLogger().println("Result: ");
-			listener.getLogger().println(TestSwarmUtil.getInstance().processResult(new TestSwarmDecisionMaker().grabPage(jobUrl)));
-
+			} else {
+                listener.getLogger().println("Analyzing Test Suite Result COMPLETED...");
+                listener.getLogger().println("");
+                listener.getLogger().println(TestSwarmUtil.getInstance().processResult(jobUrl, this.testswarmServerUrlCopy, build, listener));
+                build.setResult(Result.SUCCESS);
+                return true;
+            }
 		}
 		catch(Exception ex) {
-			System.out.println("Exception cought:\n"+ ex.toString());
+			System.out.println("Exception caught:\n"+ ex.toString());
 			listener.error(ex.toString());
 			build.setResult(Result.FAILURE);
 			return false;
-			//listener.getLogger().println("Exception cought:\n"+ ex.toString());
 		}
-//        finally {
-//        	env.remove("testPath");
-//        }
-		return true;
+
 	}
 
 	private void expandRuntimeVariables(BuildListener listener, AbstractBuild build) throws IOException, InterruptedException {
@@ -357,12 +347,12 @@ public class TestSwarmIntegrationBuilder extends Builder {
 
 		//Populate static data like user credentials and other properties
 		requestStr.append("client_id=").append(CLIENT_ID)
-		.append("&state=").append(STATE)
-		.append("&job_name=").append(URLEncoder.encode(this.jobNameCopy, CHAR_ENCODING))
-		.append("&user=").append(getUserName())
-		.append("&auth=").append(getAuthToken())
-		.append("&max=").append(getMaxRuns())
-		.append("&browsers=").append(getChooseBrowsers());
+		.append("&action=").append(STATE)
+		.append("&jobName=").append(URLEncoder.encode(this.jobNameCopy, CHAR_ENCODING))
+		.append("&authUsername=").append(getUserName())
+		.append("&authToken=").append(getAuthToken())
+		.append("&runMax=").append(getMaxRuns())
+		.append("&browserSets[]=").append(getChooseBrowsers());
 	}
 
 	private void populateTestSuites(StringBuffer requestStr) throws Exception {
@@ -381,14 +371,10 @@ public class TestSwarmIntegrationBuilder extends Builder {
 
 	private void encodeAndAppendTestSuiteUrl(StringBuffer requestStr,String testName, String testSuiteUrl, boolean cacheCrackerEnabled) throws Exception {
 
-		requestStr.append("&").append(URLEncoder.encode("suites[]", CHAR_ENCODING)).append("=")
+		requestStr.append("&").append(URLEncoder.encode("runNames[]", CHAR_ENCODING)).append("=")
 								.append(URLEncoder.encode(testName, CHAR_ENCODING))
-								.append("&").append(URLEncoder.encode("urls[]", CHAR_ENCODING)).append("=");
+								.append("&").append(URLEncoder.encode("runUrls[]", CHAR_ENCODING)).append("=");
 		requestStr.append(URLEncoder.encode(testSuiteUrl, CHAR_ENCODING));
-		if(cacheCrackerEnabled)
-		{
-			requestStr.append("&").append(URLEncoder.encode("cache_killer="+System.currentTimeMillis(), CHAR_ENCODING));
-		}
 	}
 
 	private boolean analyzeTestSuiteResults(String jobUrl, AbstractBuild build, BuildListener listener)
@@ -408,12 +394,14 @@ public class TestSwarmIntegrationBuilder extends Builder {
 
 		while (start + (minutesTimeOut * 60000) > System.currentTimeMillis()) {
 
-			html = this.resultsAnalyzer.grabPage(jobUrl);
-			results = this.resultsAnalyzer.parseResults(html);
+            // What was the result?
+            JSONObject jobResult = TestSwarmUtil.getAndParseJSON(jobUrl, build, listener);
+
+			results = this.resultsAnalyzer.parseResults(jobResult.getJSONObject("job"));
 			for(String status : results.keySet()) {
 				statusCount = (Integer)results.get(status);
 				if (statusCount != null)
-					listener.getLogger().println(status+"   ->  "+statusCount.intValue());
+					listener.getLogger().println(status+"   ->  "+statusCount);
 				else
 					listener.getLogger().println(status+"   ->  0");
 			}
@@ -423,8 +411,8 @@ public class TestSwarmIntegrationBuilder extends Builder {
 				return this.resultsAnalyzer.isBuildSuccessful();
 			}
 
-			listener.getLogger().println("Sleeping for " + secondsBetweenResultPolls
-					+ " seconds...");
+			listener.getLogger().println("Waiting for all browsers (sleeping " + secondsBetweenResultPolls
+					+ " seconds...)");
 			Thread.sleep(secondsBetweenResultPolls * 1000);
 		}
 		listener.getLogger().println("Timed Out....");
@@ -440,7 +428,7 @@ public class TestSwarmIntegrationBuilder extends Builder {
 	}
 
 	/**
-	 * Descriptor for {@link HelloWorldBuilder}. Used as a singleton.
+	 * Descriptor for . Used as a singleton.
 	 * The class is marked as public so that it can be accessed from views.
 	 *
 	 * <p>
@@ -483,7 +471,7 @@ public class TestSwarmIntegrationBuilder extends Builder {
 		 * This human readable name is used in the configuration screen.
 		 */
 		public String getDisplayName() {
-			return "TestSwarm Integration";
+			return "TestSwarm Integration (custom)";
 		}
 
 		@Override
