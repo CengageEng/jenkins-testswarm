@@ -4,34 +4,28 @@ import hudson.EnvVars;
 import hudson.Extension;
 import hudson.Launcher;
 import hudson.Util;
-import hudson.model.BuildListener;
-import hudson.model.Result;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
+import hudson.model.BuildListener;
+import hudson.model.Result;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Builder;
 import hudson.util.FormValidation;
 import hudson.util.VariableResolver;
-
-import java.io.*;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.net.URLEncoder;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import javax.servlet.ServletException;
-
-import net.sf.json.JSON;
 import net.sf.json.JSONObject;
-import net.sf.json.JSONSerializer;
-
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.export.Exported;
 import org.kohsuke.stapler.export.ExportedBean;
+
+import javax.servlet.ServletException;
+import java.io.IOException;
+import java.io.Serializable;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.util.List;
+import java.util.Map;
 
 /**
  * This is plugin is responsible for integrating TestSwarm into hudson for javascript
@@ -45,7 +39,7 @@ public class TestSwarmIntegrationBuilder extends Builder {
 	protected final String CHAR_ENCODING = "iso-8859-1";
 
 	//client id
-	private final String CLIENT_ID = "fromHudson";
+	private final String CLIENT_ID = "fromHudsom";
 
 	//state
 	private final String STATE ="addjob";
@@ -278,8 +272,8 @@ public class TestSwarmIntegrationBuilder extends Builder {
 			populateTestSuites(requestStr);
 
 
-//            listener.getLogger().println("Request to TestSwarm:");
-//            listener.getLogger().println(requestStr);
+            listener.getLogger().println("Request to TestSwarm:");
+            listener.getLogger().println(requestStr);
 
 			// Call TestSwarm
             submitResult = TestSwarmUtil.getAndParseJSON(this.testswarmServerUrlCopy + "/api.php?" + requestStr.toString(), build, listener);
@@ -383,12 +377,12 @@ public class TestSwarmIntegrationBuilder extends Builder {
 
 		long secondsBetweenResultPolls = Long.parseLong(getPollingIntervalInSecs());
 		long minutesTimeOut = Long.parseLong(getTimeOutPeriodInMins());
-
 		long start = System.currentTimeMillis();
+
 		//give testswarm 15 seconds to finish earlier activities
 		Thread.sleep(15 * 1000);
-		String html;
-		Map<String, Integer> results = new HashMap<String, Integer>();
+
+		Map<String, Map<String, Integer>> runResults;
 		boolean isBuildSuccessful = false;
 		Integer statusCount;
 
@@ -397,17 +391,24 @@ public class TestSwarmIntegrationBuilder extends Builder {
             // What was the result?
             JSONObject jobResult = TestSwarmUtil.getAndParseJSON(jobUrl, build, listener);
 
-			results = this.resultsAnalyzer.parseResults(jobResult.getJSONObject("job"));
-			for(String status : results.keySet()) {
-				statusCount = (Integer)results.get(status);
-				if (statusCount != null)
-					listener.getLogger().println(status+"   ->  "+statusCount);
-				else
-					listener.getLogger().println(status+"   ->  0");
-			}
+			runResults = this.resultsAnalyzer.parseResults(jobResult.getJSONObject("job"));
+            for (String runName : runResults.keySet()) {
+
+                listener.getLogger().println("----- " + runName + " -----");
+
+                Map<String, Integer> results = runResults.get(runName);
+
+                for(String status : results.keySet()) {
+                    statusCount = results.get(status);
+                    if (statusCount != null)
+                        listener.getLogger().println(status+"   ->  "+statusCount);
+                    else
+                        listener.getLogger().println(status+"   ->  0");
+                }
+            }
 
 			//System.out.println(results);
-			if (this.resultsAnalyzer.finished(results, listener)) {
+			if (this.resultsAnalyzer.finished(runResults, listener)) {
 				return this.resultsAnalyzer.isBuildSuccessful();
 			}
 
@@ -556,18 +557,6 @@ public class TestSwarmIntegrationBuilder extends Builder {
 		}
 
 	}
-//    public static final class TestSuiteData {
-//
-//    	public String testName;
-//
-//    	public String testUrl;
-//
-//    	@DataBoundConstructor
-//    	public TestSuiteData(String testName, String testUrl) {
-//
-//    		this.testName = testName;
-//    		this.testUrl = testUrl;
-//    	}
-//    }
+
 }
 
