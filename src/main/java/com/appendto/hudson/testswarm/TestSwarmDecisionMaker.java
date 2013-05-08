@@ -34,7 +34,7 @@ public class TestSwarmDecisionMaker {
 
                 JSONObject userAgentInfo = userAgents.getJSONObject(agentName);
                 String runStatus = userAgentInfo.getString("runStatus");
-                if (!results.containsKey(runStatus)) {
+                if (!runResults.containsKey(runStatus)) {
                     runResults.put(runStatus, 1);
                 } else {
                     runResults.put(runStatus, runResults.get(runStatus) + 1);
@@ -73,25 +73,25 @@ public class TestSwarmDecisionMaker {
         }
 
 		if (error > 0) {
-			listener.getLogger().println(error + " test suites ended with ERROR");
+			listener.getLogger().println(error + " test suite" + (error != 1 ? "s" : "") + " ERRORED OUT");
 			buildSuccessful = false;
 			isFinished = true;
 		}
 
 		if (fail > 0) {
-			listener.getLogger().println(fail+" test suites ended with FAILURE");
+			listener.getLogger().println(fail+" test suite" + (fail != 1 ? "s" : "") + " FAILED");
 			buildSuccessful = false;
 			isFinished = true;
 		}
 
 		if (timeout > 0) {
-			listener.getLogger().println(timeout+" test suites ended with TIMED OUT");
+			listener.getLogger().println(timeout+" test suite" + (timeout != 1 ? "s" : "") + " TIMED OUT");
 			buildSuccessful = false;
 			isFinished = true;
 		}
 
 		if (notstarted == 0 && progress == 0 && timeout == 0 && fail == 0 && error == 0 && pass > 0) {
-			listener.getLogger().println(pass+" test suites ended with SUCCESS");
+			listener.getLogger().println(pass+" test suite" + (pass != 1 ? "s" : "") + " FINISHED SUCCESSFULLY");
 			buildSuccessful = true;
 			isFinished = true;
 		}

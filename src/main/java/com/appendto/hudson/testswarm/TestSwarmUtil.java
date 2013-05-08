@@ -68,7 +68,7 @@ public class TestSwarmUtil {
 
         Map<String, Map<String, Map<String, String>>> runResults = new HashMap<String, Map<String, Map<String, String>>>();
 
-        stringBuffer.append("\nTest Case(s) Summary:\n ");
+        stringBuffer.append("\nTest Case Summaries:\n ");
 
         for (int runNum = 0; runNum < totalRuns; runNum++) {
 
@@ -82,10 +82,10 @@ public class TestSwarmUtil {
             Map<String, Map<String, String>> results = new HashMap<String, Map<String, String>>();
             runResults.put(runName, results);
 
-            results.put("Browsers without Results", new HashMap<String, String>());
-            results.put("Passed Browsers", new HashMap<String, String>());
-            results.put("Failed Browsers", new HashMap<String, String>());
-            results.put("Pending Browsers", new HashMap<String, String>());
+            results.put("NOT STARTED", new HashMap<String, String>());
+            results.put("PASSED", new HashMap<String, String>());
+            results.put("FAILED", new HashMap<String, String>());
+            results.put("RUNNING", new HashMap<String, String>());
 
             for (Iterator iterator = userAgents.keys(); iterator.hasNext(); ) {
                 String agentName = (String)iterator.next();
@@ -101,13 +101,13 @@ public class TestSwarmUtil {
                 }
 
                 if (runStatus.equals("failed")) {
-                    results.get("Failed Browsers").put(agentName, resultUrl);
+                    results.get("FAILED").put(agentName, resultUrl);
                 } else if (runStatus.equals("passed")) {
-                    results.get("Passed Browsers").put(agentName, resultUrl);
+                    results.get("PASSED").put(agentName, resultUrl);
                 } else if (runStatus.equals("new")) {
-                    results.get("Browsers without Results").put(agentName, resultUrl);
+                    results.get("NOT STARTED").put(agentName, resultUrl);
                 } else if (runStatus.equals("progress")) {
-                    results.get("Pending Browsers").put(agentName, resultUrl);
+                    results.get("RUNNING").put(agentName, resultUrl);
                 }
             }
         }
@@ -115,11 +115,11 @@ public class TestSwarmUtil {
         for (String suite : runResults.keySet()) {
 
             Map <String, Map<String, String>> suiteResults = runResults.get(suite);
-            stringBuffer.append("\nTest Suite: ").append(suite).append(" -----------------\n");
+            stringBuffer.append("\nTest Suite: ").append(suite).append("\n");
 
             for (String status : suiteResults.keySet()) {
                 if (suiteResults.get(status).size() > 0) {
-                    stringBuffer.append("=== ").append(status).append("\n");
+                    stringBuffer.append(status).append("\n");
                     for (String userAgent : suiteResults.get(status).keySet()) {
                         String url = suiteResults.get(status).get(userAgent);
 

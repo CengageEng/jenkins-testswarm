@@ -290,20 +290,21 @@ public class TestSwarmIntegrationBuilder extends Builder {
                     "/job/" + job.getString("id"));
 			listener.getLogger().println("**************************************************************");
 			listener.getLogger().println("");
-			listener.getLogger().println("Analyzing Test Suite Result....");
+			listener.getLogger().println("Running Test Suites....");
 
             String jobUrl = this.testswarmServerUrlCopy + "/api.php?action=job&item=" + job.getString("id");
 
 			if (!analyzeTestSuiteResults(jobUrl, build, listener)) {
-				listener.getLogger().println("Analyzing Test Suite Result COMPLETED...");
+				listener.getLogger().println("...completed");
 				listener.getLogger().println("");
 
 				listener.getLogger().println(TestSwarmUtil.getInstance().processResult(jobUrl, this.testswarmServerUrlCopy, build, listener));
 				build.setResult(Result.FAILURE);
 				return false;
 			} else {
-                listener.getLogger().println("Analyzing Test Suite Result COMPLETED...");
+                listener.getLogger().println("...completed");
                 listener.getLogger().println("");
+
                 listener.getLogger().println(TestSwarmUtil.getInstance().processResult(jobUrl, this.testswarmServerUrlCopy, build, listener));
                 build.setResult(Result.SUCCESS);
                 return true;
@@ -394,17 +395,18 @@ public class TestSwarmIntegrationBuilder extends Builder {
 			runResults = this.resultsAnalyzer.parseResults(jobResult.getJSONObject("job"));
             for (String runName : runResults.keySet()) {
 
-                listener.getLogger().println("----- " + runName + " -----");
+                listener.getLogger().print("[" + runName + "]");
 
                 Map<String, Integer> results = runResults.get(runName);
 
                 for(String status : results.keySet()) {
                     statusCount = results.get(status);
                     if (statusCount != null)
-                        listener.getLogger().println(status+"   ->  "+statusCount);
+                        listener.getLogger().print(" | " + status + "(" + statusCount + ")");
                     else
-                        listener.getLogger().println(status+"   ->  0");
+                        listener.getLogger().print(" | " + status + "(0)");
                 }
+                listener.getLogger().println();
             }
 
 			//System.out.println(results);
@@ -412,11 +414,11 @@ public class TestSwarmIntegrationBuilder extends Builder {
 				return this.resultsAnalyzer.isBuildSuccessful();
 			}
 
-			listener.getLogger().println("Waiting for all browsers (sleeping " + secondsBetweenResultPolls
-					+ " seconds...)");
+			listener.getLogger().println("...polling TestSwarm again in " + secondsBetweenResultPolls
+					+ " seconds");
 			Thread.sleep(secondsBetweenResultPolls * 1000);
 		}
-		listener.getLogger().println("Timed Out....");
+		listener.getLogger().println("== TIMED OUT WAITING FOR RESULTS ==");
 		return false;
 
 	}
