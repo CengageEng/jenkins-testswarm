@@ -72,19 +72,19 @@ public class TestSwarmDecisionMaker {
             timeout += results.get("timeout") != null ? results.get("timeout") : 0;
         }
 
-		if (error > 0) {
+		if (error > 0 && progress == 0 && notstarted == 0) {
 			listener.getLogger().println(error + " test suite" + (error != 1 ? "s" : "") + " ERRORED OUT");
 			buildSuccessful = false;
 			isFinished = true;
 		}
 
-		if (fail > 0) {
+		if (fail > 0 && progress == 0 && notstarted == 0) {
 			listener.getLogger().println(fail+" test suite" + (fail != 1 ? "s" : "") + " FAILED");
 			buildSuccessful = false;
 			isFinished = true;
 		}
 
-		if (timeout > 0) {
+		if (timeout > 0 && progress == 0 && notstarted == 0) {
 			listener.getLogger().println(timeout+" test suite" + (timeout != 1 ? "s" : "") + " TIMED OUT");
 			buildSuccessful = false;
 			isFinished = true;
