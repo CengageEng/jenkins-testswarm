@@ -27,6 +27,7 @@
         	<option value="all">All available browsers</option>
             <option value="current">Current release of all major browsers</option>
             <option value="beta">Upcoming alphas/betas of popular browsers</option>
+            <option value="mobile">Mobile browsers</option>
         </select>
     </f:entry>
 
