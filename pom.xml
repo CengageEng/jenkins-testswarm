@@ -9,7 +9,7 @@
 
   <groupId>	com.appendto.hudson.testswarm</groupId>
   <artifactId>testswarmbuilder</artifactId>
-  <version>1.5.5</version>
+  <version>1.5.6</version>
   <packaging>hpi</packaging>
 
   <!-- get every artifact through maven.glassfish.org, which proxies all the artifacts that we need -->
